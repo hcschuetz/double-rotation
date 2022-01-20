@@ -2,8 +2,6 @@
  * TODO
  * - Put state in URL
  *   - Use links referencing these URLs for links in explanation story
- * - Support decoupled rotation speeds (optionally).
- *   (This does not fit with the "% 1" on rounds!  Nor does it fit with traces.)
  * - Draw secondary traces?
  */
 import React, { Context, createContext, Fragment, useContext, useEffect, useRef, useState } from 'react';
@@ -12,9 +10,12 @@ import './App.css';
 const traceSteps = 1000;
 
 type Options = {
-  speed: number
   cornersA: number, cornersB: number,
   percentageA: number,
+  baseSpeed: number,
+  manualSpeedup: boolean,
+  speedupA: number,
+  speedupB: number,
   showCenter: boolean,
   showPrimaryHandsA: boolean, showPrimaryEndsA: boolean, showPrimaryEdgesA: boolean,
   showSecondaryHandsA: boolean, showSecondaryEdgesA: boolean,
@@ -33,7 +34,10 @@ const initialOptions: Options = {
   cornersA: 4,
   cornersB: 3,
   percentageA: 60,
-  speed: 2,
+  baseSpeed: 2,
+  manualSpeedup: false,
+  speedupA: 3,
+  speedupB: 4,
   showPrimaryHandsA: false, showPrimaryEndsA: false, showPrimaryEdgesA: false,
   showSecondaryHandsA: false, showSecondaryEdgesA: true,
   showPrimaryHandsB: false, showPrimaryEndsB: false, showPrimaryEdgesB: false,
@@ -56,7 +60,7 @@ const polar = (r: number, turns: number): [number, number] => ([
 function MovingParts(): JSX.Element {
   const options = useContext(DisplayOptions);
   const speedRef = useRef(0);
-  speedRef.current = options.speed;
+  speedRef.current = options.baseSpeed;
   const prevTimestamp = useRef(0);
   if (prevTimestamp.current === undefined) {
     prevTimestamp.current = performance.now();
@@ -70,10 +74,7 @@ function MovingParts(): JSX.Element {
       }
       const deltaT = timestamp - prevTimestamp.current;
       const deltaRounds = deltaT/60000 * speedRef.current;
-      // We only care about the fractional part of "rounds", thus "% 1".
-      // We want that part to be always positive (even though this is not really
-      // necessary), even with negative speed, thus "+ 1".
-      setRounds(rounds => (rounds + deltaRounds + 1) % 1);
+      setRounds(rounds => rounds + deltaRounds);
       prevTimestamp.current = timestamp;
       requestAnimationFrame(update);
     }
@@ -84,6 +85,8 @@ function MovingParts(): JSX.Element {
 
   const p = options.cornersA;
   const q = options.cornersB;
+  const speedupA = options.manualSpeedup ? options.speedupA : q;
+  const speedupB = options.manualSpeedup ? options.speedupB : p;
 
   const forEachPoint = (f: (i: number, j: number) => JSX.Element): JSX.Element[] =>
     indices(p).flatMap(i => indices(q).map(j => (
@@ -95,10 +98,10 @@ function MovingParts(): JSX.Element {
   // by introducing independent rotations.
   // Notice that the coupling ensures closed traces.
   const pHands = indices(p).map(i =>
-    polar(    options.percentageA/100, -q*rounds + i/p)
+    polar(    options.percentageA/100, -speedupA*rounds + i/p)
   );
   const qHands = indices(q).map(j =>
-    polar(1 - options.percentageA/100,  p*rounds + j/q)
+    polar(1 - options.percentageA/100,  speedupB*rounds + j/q)
   );
 
   const points = pHands.map(([xp, yp]) => qHands.map(([xq, yq]) => (
@@ -179,11 +182,13 @@ function App() {
 
   const p = options.cornersA;
   const q = options.cornersB;
+  const speedupA = options.manualSpeedup ? options.speedupA : q;
+  const speedupB = options.manualSpeedup ? options.speedupB : p;
   const rp = options.percentageA/100;
   const rq = 1-rp;
-  const trace = indices(traceSteps).map(i => {
-    const [xp, yp] = polar(rq,  p*i/traceSteps);
-    const [xq, yq] = polar(rp, -q*i/traceSteps);
+  const trace = indices(traceSteps+1).map(i => {
+    const [xp, yp] = polar(rq,  speedupB*i/traceSteps);
+    const [xq, yq] = polar(rp, -speedupA*i/traceSteps);
     return `${xp+xq},${yp+yq}`;
   }).join(" ");
 
@@ -207,7 +212,7 @@ function App() {
       <div className="App">
         <svg viewBox="-1.1 -1.1 2.2 2.2" width="600" height="600">
           {options.showTrace && (
-            <polygon points={trace} stroke="lightgrey" strokeWidth={0.01} fill="none"/>
+            <polyline points={trace} stroke="lightgrey" strokeWidth={0.01} fill="none"/>
            )}
           <MovingParts/>
         </svg>
@@ -216,14 +221,6 @@ function App() {
             <tbody>
               <tr>
                 <th colSpan={2}><u>Parameters</u></th>
-              </tr>
-              <tr>
-                <th>speed</th>
-                <td>
-                  {slider("speed", -10, 10, 0.1)}
-                  <br/>
-                  <span>{options.speed}</span>
-                </td>
               </tr>
               <tr>
                 <th>#corners A</th>
@@ -249,6 +246,36 @@ function App() {
                   <span>A: {options.percentageA}%&emsp;B: {100 - options.percentageA}%</span>
                 </td>
               </tr>
+              <tr>
+                <th>base speed</th>
+                <td>
+                  {slider("baseSpeed", -10, 10, 0.1)}
+                  <br/>
+                  <span>{options.baseSpeed}</span>
+                </td>
+              </tr>
+              <tr>
+                <th>manual speedup</th>
+                <td>{flag("manualSpeedup")}</td>
+              </tr>
+              {options.manualSpeedup && (<Fragment>
+                <tr>
+                  <th>speedup A</th>
+                  <td>
+                    {slider("speedupA", -7, 7, 0.1)}
+                    <br/>
+                    <span>{options.speedupA}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <th>speedup B</th>
+                  <td>
+                    {slider("speedupB", -7, 7, 0.1)}
+                    <br/>
+                    <span>{options.speedupB}</span>
+                  </td>
+                </tr>
+              </Fragment>)}
             </tbody>
           </table>
           <table style={{display: "inline-table"}}>
