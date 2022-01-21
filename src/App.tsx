@@ -42,7 +42,7 @@ const initialOptions: Options = {
   showBlueSecondaryHands: false, showRedSecondaryHands: false,
   showBlueSecondaryEdges: true, showRedSecondaryEdges: false,
   showCorners: true,
-  showTrace: true,
+  showTrace: false,
 };
 
 type FilteredKeys<T, U> = { [P in keyof T]: T[P] extends U ? P : never }[keyof T];
