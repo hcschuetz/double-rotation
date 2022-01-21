@@ -45,6 +45,67 @@ const initialOptions: Options = {
   showTrace: false,
 };
 
+// -----------------------------------------------------------------------------
+// Support for serializing Options (into the URL hash section) and for
+// deserializing again
+
+const flag2option: {[k:string]: string} = {};
+const option2flag: {[k:string]: string} = {};
+const option2type: {[k:string]: string} = {};
+`
+A1 :b:showPrimaryAxis
+H1B:b:showBluePrimaryHands
+H1R:b:showRedPrimaryHands
+E1B:b:showBluePrimaryEdges
+E1R:b:showRedPrimaryEdges
+A2B:b:showBlueSecondaryAxes
+A2R:b:showRedSecondaryAxes
+H2B:b:showBlueSecondaryHands
+H2R:b:showRedSecondaryHands
+E2B:b:showBlueSecondaryEdges
+E2R:b:showRedSecondaryEdges
+C  :b:showCorners
+T  :b:showTrace
+cA :n:cornersA
+cB :n:cornersB
+pA :n:percentageA
+bS :n:baseSpeed
+MS :b:manualSpeedup
+sA :n:speedupA
+sB :n:speedupB
+`.trim().split(/\r\n|\r|\n/).forEach(line => {
+  const [f, t, o] = line.trim().split(":").map(field => field.trim());
+  flag2option[f] = o;
+  option2flag[o] = f;
+  option2type[o] = t;
+});
+
+const options2hash = (options: Options): string =>
+  "#" +
+  Object.entries(options).flatMap(([k, v]) =>
+    v === false ? [] :
+    v === true  ? [option2flag[k]] :
+    [option2flag[k] + "=" + v]
+  ).join("&");
+
+const hash2options = (sWithHash: string): Options => {
+  const s = sWithHash.replace(/^#/, "");
+  if (!s) {
+    // no hash (yet); return default
+    return initialOptions;
+  }
+  const raw = Object.fromEntries(
+    s.split("&").map(entry => entry.split("="))
+  );
+  return Object.fromEntries(Object.keys(initialOptions).map(o => [o,
+    option2type[o] === "b" ? option2flag[o] in raw       :
+    option2type[o] === "n" ? Number(raw[option2flag[o]]) :
+    "### SHOULD NOT OCCUR ###"
+  ])) as Options;
+}
+
+// -----------------------------------------------------------------------------
+
 type FilteredKeys<T, U> = { [P in keyof T]: T[P] extends U ? P : never }[keyof T];
 
 type NumericOption = FilteredKeys<Options, number>;
@@ -387,7 +448,31 @@ function Config(): JSX.Element {
 }
 
 function App() {
-  const [options, setOptions] = useState(initialOptions);
+  const [options, setOptionsRaw] = useState(initialOptions);
+
+  // We intercept setOptions to serialize new options to the URL hash.
+  // We also intercept hash changes and deserialize the hash into the options state.
+
+  function setOptions(update: Options | ((old: Options) => Options)): void {
+    /* eslint-disable-next-line no-restricted-globals */
+    location.hash = options2hash(
+      update instanceof Function ? update(options) : update
+    );
+    // No need to call setOptionsRaw(...) here because the hash update will
+    // trigger a "hashchange" event and thus invoke setOptionsRaw(...) in the
+    // event handler function readHash().
+  }
+
+  useEffect(() => {
+    function readHash() {
+      /* eslint-disable-next-line no-restricted-globals */
+      setOptionsRaw(hash2options(location.hash));
+    };
+    readHash();
+    window.addEventListener("hashchange", readHash);
+    return () => window.removeEventListener("hashchange", readHash);
+  }, []);
+
   const speedRef = useRef(0);
   speedRef.current = options.baseSpeed;
   return (
