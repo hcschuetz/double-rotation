@@ -1,14 +1,14 @@
 /**
  * TODO
  * - Put state in URL
- *   - Use links referencing these URLs for links in explanation story
+ *   - Use links referencing these URLs in explanation story
  * - Draw secondary traces?
  */
-import { Context, createContext, FC, Fragment, useContext, useEffect, useRef, useState } from 'react';
+import {
+  Context, createContext, FC, Fragment, ReactNode,
+  useContext, useEffect, useRef, useState
+} from 'react';
 import './App.css';
-
-// How many segments to use for a trace. (A parameter that can be tuned.)
-const traceSteps = 1000;
 
 type Options = {
   cornersA: number, cornersB: number,
@@ -66,16 +66,17 @@ const ProvideDisplayOptions: FC<{value: Options, setter: Setter<Options>}> =
     </DisplayOptions.Provider>
   );
 
+// The numeric value managed by Rounds/SetRounds is the "simulated time"
+// (similar to a position in an audio or video recording).
+// With a speed of 1 a "round" takes a minute.
 const Rounds: Context<number> = createContext(0);
 const SetRounds: Context<Setter<number>> = createContext((x: any) => {});
 
-const ProvideRounds: FC<{speedRef: {current: number}}> = ({
-  speedRef, children
-}) => {
+const ProvideRounds: FC<{speedRef: {current: number}}> = ({speedRef, children}) => {
   const [rounds, setRounds] = useState(0);
 
   const prevTimestamp = useRef(0);
-  if (prevTimestamp.current === undefined) {
+  if (prevTimestamp.current === 0) {
     prevTimestamp.current = performance.now();
   }
   useEffect(() => {
@@ -85,6 +86,8 @@ const ProvideRounds: FC<{speedRef: {current: number}}> = ({
         return;
       }
       const deltaT = timestamp - prevTimestamp.current;
+      // 60000 is the factor between milliseconds (JS timestamps) and minutes
+      // (our "rounds").
       const deltaRounds = deltaT/60000 * speedRef.current;
       setRounds(rounds => rounds + deltaRounds);
       prevTimestamp.current = timestamp;
@@ -108,122 +111,124 @@ const indices = (n: number): number[] => Array(n).fill(undefined).map((_,i) => i
 
 const TAU = 2 * Math.PI;
 
-const polar = (r: number, turns: number): [number, number] => ([
+type Point = [number, number];
+
+const polar = (r: number, turns: number): Point => ([
   r * Math.cos(turns * TAU),
   r * Math.sin(turns * TAU),
 ]);
+
+const line = (p1: Point, p2: Point, color: string, width: number): JSX.Element => (
+  <line stroke={color} strokeWidth={width}
+    x1={p1[0]} y1={p1[1]} x2={p2[0]} y2={p2[1]}
+  />
+);
+
+const dot = (
+  point: Point, color: string, radius: number, showMark: boolean
+): JSX.Element => (<>
+  <circle r={radius} fill={color} cx={point[0]} cy={point[1]}/>
+  {showMark && (
+    <circle fill="white" r={0.01} cx={point[0]} cy={point[1]}/>
+  )}
+</>);
+
+const center: Point = [0, 0];
+
+const forEachHand = (
+  hands: Point[],
+  f: (point: Point, i: number) => ReactNode,
+): JSX.Element[] =>
+  hands.map((point, i) => (<Fragment key={i}>{f(point, i)}</Fragment>));
+
+function getDimensions(options: Options) {
+  const cornersA = options.cornersA;
+  const cornersB = options.cornersB;
+  const lengthA = options.percentageA / 100;
+  const lengthB = 1 - lengthA;
+  const speedupA = options.manualSpeedup ? options.speedupA :  cornersB;
+  const speedupB = options.manualSpeedup ? options.speedupB : -cornersA;
+  return {cornersA, cornersB, lengthA, lengthB, speedupA, speedupB};
+}
 
 function MovingParts(): JSX.Element {
   const options = useContext(DisplayOptions);
   const rounds = useContext(Rounds);
 
-  const p = options.cornersA;
-  const q = options.cornersB;
-  const speedupA = options.manualSpeedup ? options.speedupA :  q;
-  const speedupB = options.manualSpeedup ? options.speedupB : -p;
+  const {cornersA, cornersB, lengthA, lengthB, speedupA, speedupB} =
+    getDimensions(options);
 
-  const forEachPoint = (f: (i: number, j: number) => JSX.Element): JSX.Element[] =>
-    indices(p).flatMap(i => indices(q).map(j => (
-      <Fragment key={`${i},${j}`}>{f(i, j)}</Fragment>
-    )));
+  const handsA: Point[] =
+    indices(cornersA).map(i => polar(lengthA, speedupA * rounds + i / cornersA));
+  const handsB: Point[] =
+    indices(cornersB).map(j => polar(lengthB, speedupB * rounds + j / cornersB));
 
-  // The rotation of one polygon family is coupled to the number of
-  // corners of the polygons of the other family.  We could relax this coupling
-  // by introducing independent rotations.
-  // Notice that the coupling ensures closed traces.
-  const pHands = indices(p).map(i =>
-    polar(    options.percentageA/100, speedupA*rounds + i/p)
-  );
-  const qHands = indices(q).map(j =>
-    polar(1 - options.percentageA/100, speedupB*rounds + j/q)
-  );
+  const corners: Point[][] =
+    handsA.map(([xa, ya]) => handsB.map(([xb, yb]): Point => ([xa+xb, ya+yb])));
 
-  const points = pHands.map(([xp, yp]) => qHands.map(([xq, yq]) => (
-    [xp+xq, yp+yq]
-  )));
+  const forEachCorner = (f: (i: number, j: number) => ReactNode): JSX.Element[] =>
+    indices(cornersA).map(i => (
+      <Fragment key={i}>
+        {indices(cornersB).map(j => (
+          <Fragment key={j}>
+            {f(i, j)}
+          </Fragment>
+        ))}
+      </Fragment>
+    ));
+
   return (<>
-    {options.showBlueSecondaryEdges && forEachPoint((i, j) => (
-      <line stroke="blue" strokeWidth="0.01"
-        x1={points[i][ j     ][0]} y1={points[i][ j     ][1]}
-        x2={points[i][(j+1)%q][0]} y2={points[i][(j+1)%q][1]}
-      />
-    ))}
-    {options.showRedSecondaryEdges && forEachPoint((i, j) => (
-      <line stroke="red" strokeWidth="0.01"
-        x1={points[ i     ][j][0]} y1={points[ i     ][j][1]}
-        x2={points[(i+1)%p][j][0]} y2={points[(i+1)%p][j][1]}
-      />
-    ))}
-    {options.showRedPrimaryHands && qHands.map(([x, y], j) => (
-      <line key={j} stroke="red" strokeWidth="0.02"
-        x1={0} y1={0}
-        x2={x} y2={y}
-      />
-    ))}
-    {options.showBluePrimaryEdges && pHands.map(([x, y], i) => (
-      <line key={i} stroke="blue" strokeWidth="0.02"
-        x1={x} y1={y}
-        x2={pHands[(i+1)%p][0]} y2={pHands[(i+1)%p][1]}
-      />
-    ))}
-    {options.showRedPrimaryEdges && qHands.map(([x, y], j) => (
-      <line key={j} stroke="red" strokeWidth="0.02"
-        x1={x} y1={y}
-        x2={qHands[(j+1)%q][0]} y2={qHands[(j+1)%q][1]}
-      />
-    ))}
-    {options.showBluePrimaryHands && pHands.map(([x, y], i) => (
-      <line key={i} stroke="blue" strokeWidth="0.02"
-        x1={0} y1={0}
-        x2={x} y2={y}
-      />
-    ))}
-    {options.showRedSecondaryAxes && qHands.map(([qx, qy], j) => (
-
-      <circle key={j} fill="red" r={0.03} cx={qx} cy={qy}/>
-    ))}
-    {options.showRedSecondaryHands && forEachPoint((i, j) => {
-      const [px, py] = qHands[j];
-      return (
-        <line stroke="red" strokeWidth="0.01"
-          x1={points[i][j][0]} y1={points[i][j][1]}
-          x2={px} y2={py}
-        />
-      )
-    })}
-    {options.showBlueSecondaryHands && forEachPoint((i, j) => {
-      const [qx, qy] = pHands[i];
-      return (
-        <line stroke="blue" strokeWidth="0.01"
-          x1={points[i][j][0]} y1={points[i][j][1]}
-          x2={qx} y2={qy}
-        />
-      )
-    })}
-    {options.showBlueSecondaryAxes && pHands.map(([qx, qy], i) => (
-      <circle key={i} fill="blue" r={0.03} cx={qx} cy={qy}/>
-    ))}
-    {options.showCorners && forEachPoint((i, j) => (
-      <circle r="0.02" fill={i+j ? "black" : "magenta"}
-        cx={points[i][j][0]} cy={points[i][j][1]}
-      />
-    ))}
-    {options.showPrimaryAxis && <circle r={0.03}/>}
+    {options.showBluePrimaryHands &&
+      forEachHand(handsA, (point, i) => line(center, point, "blue", 0.02))
+    }
+    {options.showRedPrimaryHands &&
+      forEachHand(handsB, (point, j) => line(center, point, "red", 0.02))
+    }
+    {options.showBluePrimaryEdges &&
+      forEachHand(handsA, (point, i) => line(point, handsA[(i+1)%cornersA], "blue", 0.02))
+    }
+    {options.showRedPrimaryEdges &&
+      forEachHand(handsB, (point, j) => line(point, handsB[(j+1)%cornersB], "red", 0.02))
+    }
+    {options.showBlueSecondaryHands &&
+      forEachCorner((i, j) => line(corners[i][j], handsA[i], "blue", 0.01))
+    }
+    {options.showRedSecondaryHands &&
+      forEachCorner((i, j) => line(corners[i][j], handsB[j], "red", 0.01))
+    }
+    {options.showBlueSecondaryEdges &&
+      forEachCorner((i, j) => line(corners[i][j], corners[i][(j+1)%cornersB], "blue", 0.01))
+    }
+    {options.showRedSecondaryEdges &&
+      forEachCorner((i, j) => line(corners[i][j], corners[(i+1)%cornersA][j], "red", 0.01))
+    }
+    {options.showPrimaryAxis &&
+      dot(center, "black", 0.03, true)
+    }
+    {options.showBlueSecondaryAxes &&
+      forEachHand(handsA, (point, i) => dot(point, "blue", 0.03, i === 0))
+    }
+    {options.showRedSecondaryAxes &&
+      forEachHand(handsB, (point, j) => dot(point, "red", 0.03, j === 0))
+    }
+    {options.showCorners &&
+      forEachCorner((i, j) => dot(corners[i][j], "black", 0.02, i === 0 && j === 0))
+    }
   </>);
 }
 
+// How many segments to use for a trace. (A parameter that can be tuned.)
+const traceSteps = 1000;
+
 function Trace(): JSX.Element {
   const options = useContext(DisplayOptions);
-  const p = options.cornersA;
-  const q = options.cornersB;
-  const speedupA = options.manualSpeedup ? options.speedupA : q;
-  const speedupB = options.manualSpeedup ? options.speedupB : -p;
-  const rp = options.percentageA/100;
-  const rq = 1-rp;
+  const {lengthA, lengthB, speedupA, speedupB} = getDimensions(options);
+
   const trace = indices(traceSteps+1).map(i => {
-    const [xp, yp] = polar(rq, speedupB*i/traceSteps);
-    const [xq, yq] = polar(rp, speedupA*i/traceSteps);
-    return `${xp+xq},${yp+yq}`;
+    const rounds = i / traceSteps;
+    const [xa, ya] = polar(lengthA, speedupA * rounds);
+    const [xb, yb] = polar(lengthB, speedupB * rounds);
+    return `${xa+xb},${ya+yb}`;
   }).join(" ");
 
   return (
@@ -252,7 +257,7 @@ function Config(): JSX.Element {
   );
 
   return (
-    <div>
+    <div style={{margin: "10px"}}>
       <table style={{display: "inline-table", marginRight: "2em"}}>
         <tbody>
           <tr>
