@@ -17,12 +17,13 @@ type Options = {
   manualSpeedup: boolean,
   speedupA: number,
   speedupB: number,
-  showCenter: boolean,
-  showPrimaryHandsA: boolean, showPrimaryEndsA: boolean, showPrimaryEdgesA: boolean,
-  showSecondaryHandsA: boolean, showSecondaryEdgesA: boolean,
-  showPrimaryHandsB: boolean, showPrimaryEndsB: boolean, showPrimaryEdgesB: boolean,
-  showSecondaryHandsB: boolean, showSecondaryEdgesB: boolean,
-  showSecondaryEnds: boolean,
+  showPrimaryAxis: boolean,
+  showBluePrimaryHands: boolean, showRedPrimaryHands: boolean,
+  showBluePrimaryEdges: boolean, showRedPrimaryEdges: boolean,
+  showBlueSecondaryAxes: boolean, showRedSecondaryAxes: boolean,
+  showBlueSecondaryHands: boolean, showRedSecondaryHands: boolean,
+  showBlueSecondaryEdges: boolean, showRedSecondaryEdges: boolean,
+  showCorners: boolean,
   showTrace: boolean,
 };
 
@@ -34,11 +35,13 @@ const initialOptions: Options = {
   manualSpeedup: false,
   speedupA: 3,
   speedupB: -4,
-  showPrimaryHandsA: false, showPrimaryEndsA: false, showPrimaryEdgesA: false,
-  showSecondaryHandsA: false, showSecondaryEdgesA: true,
-  showPrimaryHandsB: false, showPrimaryEndsB: false, showPrimaryEdgesB: false,
-  showSecondaryHandsB: false, showSecondaryEdgesB: false,
-  showCenter: false, showSecondaryEnds: true,
+  showPrimaryAxis: false, 
+  showBluePrimaryHands: false, showRedPrimaryHands: false,
+  showBluePrimaryEdges: false, showRedPrimaryEdges: false,
+  showBlueSecondaryAxes: false, showRedSecondaryAxes: false,
+  showBlueSecondaryHands: false, showRedSecondaryHands: false,
+  showBlueSecondaryEdges: true, showRedSecondaryEdges: false,
+  showCorners: true,
   showTrace: true,
 };
 
@@ -139,46 +142,47 @@ function MovingParts(): JSX.Element {
     [xp+xq, yp+yq]
   )));
   return (<>
-    {options.showSecondaryEdgesA && forEachPoint((i, j) => (
+    {options.showBlueSecondaryEdges && forEachPoint((i, j) => (
       <line stroke="blue" strokeWidth="0.01"
         x1={points[i][ j     ][0]} y1={points[i][ j     ][1]}
         x2={points[i][(j+1)%q][0]} y2={points[i][(j+1)%q][1]}
       />
     ))}
-    {options.showSecondaryEdgesB && forEachPoint((i, j) => (
+    {options.showRedSecondaryEdges && forEachPoint((i, j) => (
       <line stroke="red" strokeWidth="0.01"
         x1={points[ i     ][j][0]} y1={points[ i     ][j][1]}
         x2={points[(i+1)%p][j][0]} y2={points[(i+1)%p][j][1]}
       />
     ))}
-    {options.showPrimaryHandsB && qHands.map(([x, y], j) => (
+    {options.showRedPrimaryHands && qHands.map(([x, y], j) => (
       <line key={j} stroke="red" strokeWidth="0.02"
         x1={0} y1={0}
         x2={x} y2={y}
       />
     ))}
-    {options.showPrimaryEdgesA && pHands.map(([x, y], i) => (
+    {options.showBluePrimaryEdges && pHands.map(([x, y], i) => (
       <line key={i} stroke="blue" strokeWidth="0.02"
         x1={x} y1={y}
         x2={pHands[(i+1)%p][0]} y2={pHands[(i+1)%p][1]}
       />
     ))}
-    {options.showPrimaryEdgesB && qHands.map(([x, y], j) => (
+    {options.showRedPrimaryEdges && qHands.map(([x, y], j) => (
       <line key={j} stroke="red" strokeWidth="0.02"
         x1={x} y1={y}
         x2={qHands[(j+1)%q][0]} y2={qHands[(j+1)%q][1]}
       />
     ))}
-    {options.showPrimaryHandsA && pHands.map(([x, y], i) => (
+    {options.showBluePrimaryHands && pHands.map(([x, y], i) => (
       <line key={i} stroke="blue" strokeWidth="0.02"
         x1={0} y1={0}
         x2={x} y2={y}
       />
     ))}
-    {options.showPrimaryEndsB && qHands.map(([qx, qy], j) => (
+    {options.showRedSecondaryAxes && qHands.map(([qx, qy], j) => (
+
       <circle key={j} fill="red" r={0.03} cx={qx} cy={qy}/>
     ))}
-    {options.showSecondaryHandsB && forEachPoint((i, j) => {
+    {options.showRedSecondaryHands && forEachPoint((i, j) => {
       const [px, py] = qHands[j];
       return (
         <line stroke="red" strokeWidth="0.01"
@@ -187,7 +191,7 @@ function MovingParts(): JSX.Element {
         />
       )
     })}
-    {options.showSecondaryHandsA && forEachPoint((i, j) => {
+    {options.showBlueSecondaryHands && forEachPoint((i, j) => {
       const [qx, qy] = pHands[i];
       return (
         <line stroke="blue" strokeWidth="0.01"
@@ -196,15 +200,15 @@ function MovingParts(): JSX.Element {
         />
       )
     })}
-    {options.showPrimaryEndsA && pHands.map(([qx, qy], i) => (
+    {options.showBlueSecondaryAxes && pHands.map(([qx, qy], i) => (
       <circle key={i} fill="blue" r={0.03} cx={qx} cy={qy}/>
     ))}
-    {options.showSecondaryEnds && forEachPoint((i, j) => (
+    {options.showCorners && forEachPoint((i, j) => (
       <circle r="0.02" fill={i+j ? "black" : "magenta"}
         cx={points[i][j][0]} cy={points[i][j][1]}
       />
     ))}
-    {options.showCenter && <circle r={0.03}/>}
+    {options.showPrimaryAxis && <circle r={0.03}/>}
   </>);
 }
 
@@ -330,8 +334,8 @@ function Config(): JSX.Element {
             <th colSpan={3}><u>Display Components</u></th>
           </tr>
           <tr>
-            <th>center</th>
-            <td colSpan={2}>{flag("showCenter")}</td>
+            <th>primary axis</th>
+            <td colSpan={2}>{flag("showPrimaryAxis")}</td>
           </tr>
           <tr>
             <th></th>
@@ -340,32 +344,32 @@ function Config(): JSX.Element {
           </tr>
           <tr>
             <th>primary hands</th>
-            <td>{flag("showPrimaryHandsA")}</td>
-            <td>{flag("showPrimaryHandsB")}</td>
+            <td>{flag("showBluePrimaryHands")}</td>
+            <td>{flag("showRedPrimaryHands")}</td>
           </tr>
           <tr>
             <th>primary edges</th>
-            <td>{flag("showPrimaryEdgesA")}</td>
-            <td>{flag("showPrimaryEdgesB")}</td>
+            <td>{flag("showBluePrimaryEdges")}</td>
+            <td>{flag("showRedPrimaryEdges")}</td>
           </tr>
           <tr>
-            <th>primary ends</th>
-            <td>{flag("showPrimaryEndsA")}</td>
-            <td>{flag("showPrimaryEndsB")}</td>
+            <th>secondary axes</th>
+            <td>{flag("showBlueSecondaryAxes")}</td>
+            <td>{flag("showRedSecondaryAxes")}</td>
           </tr>
           <tr>
             <th>secondary hands</th>
-            <td>{flag("showSecondaryHandsA")}</td>
-            <td>{flag("showSecondaryHandsB")}</td>
+            <td>{flag("showBlueSecondaryHands")}</td>
+            <td>{flag("showRedSecondaryHands")}</td>
           </tr>
           <tr>
             <th>secondary edges</th>
-            <td>{flag("showSecondaryEdgesA")}</td>
-            <td>{flag("showSecondaryEdgesB")}</td>
+            <td>{flag("showBlueSecondaryEdges")}</td>
+            <td>{flag("showRedSecondaryEdges")}</td>
           </tr>
           <tr>
-            <th>secondary ends</th>
-            <td colSpan={2}>{flag("showSecondaryEnds")}</td>
+            <th>ends/corners</th>
+            <td colSpan={2}>{flag("showCorners")}</td>
           </tr>
           <tr>
             <th>trace</th>
@@ -384,7 +388,7 @@ function App() {
   return (
     <ProvideDisplayOptions value={options} setter={setOptions}>
       <ProvideRounds speedRef={speedRef}>
-        <div className="App">
+        <div style={{display: "flex", flexFlow: "row wrap", alignItems: "top"}}>
           <svg viewBox="-1.1 -1.1 2.2 2.2" width="600" height="600">
             {options.showTrace && (<Trace/>)}
             <MovingParts/>
