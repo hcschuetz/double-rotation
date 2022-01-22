@@ -559,7 +559,7 @@ const Documentation = () => (
         If you untick the "manual speedup", then the relative speeds
         will be chosen automatically in a way appropriate for the numbers
         of corners selected above.
-        (But notice that this only works completely if the numbers of
+        (But notice that all points follow the same trace only if the numbers of
         corners are coprime.)
       </li>
       <li>
