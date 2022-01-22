@@ -592,8 +592,7 @@ function App() {
   // We also intercept hash changes and deserialize the hash into the options state.
 
   function setOptions(update: Options | ((old: Options) => Options)): void {
-    /* eslint-disable-next-line no-restricted-globals */
-    location.hash = options2hash(
+    window.location.hash = options2hash(
       update instanceof Function ? update(options) : update
     );
     // No need to call setOptionsRaw(...) here because the hash update will
@@ -603,8 +602,7 @@ function App() {
 
   useEffect(() => {
     function readHash() {
-      /* eslint-disable-next-line no-restricted-globals */
-      setOptionsRaw(hash2options(location.hash));
+      setOptionsRaw(hash2options(window.location.hash));
     };
     readHash();
     window.addEventListener("hashchange", readHash);
