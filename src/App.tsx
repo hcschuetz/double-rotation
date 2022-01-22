@@ -1,9 +1,3 @@
-/**
- * TODO
- * - Put state in URL
- *   - Use links referencing these URLs in explanation story
- * - Draw secondary traces?
- */
 import {
   Context, createContext, FC, Fragment, ReactNode,
   useContext, useEffect, useRef, useState
