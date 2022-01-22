@@ -40,9 +40,9 @@ const initialOptions: Options = {
   showBluePrimaryEdges: false, showRedPrimaryEdges: false,
   showBlueSecondaryAxes: false, showRedSecondaryAxes: false,
   showBlueSecondaryHands: false, showRedSecondaryHands: false,
-  showBlueSecondaryEdges: true, showRedSecondaryEdges: false,
+  showBlueSecondaryEdges: true, showRedSecondaryEdges: true,
   showCorners: true,
-  showTrace: false,
+  showTrace: true,
 };
 
 // -----------------------------------------------------------------------------
