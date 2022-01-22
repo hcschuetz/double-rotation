@@ -447,6 +447,150 @@ function Config(): JSX.Element {
     )
 }
 
+// Shorthand for links to save
+// - typing "&amp;" for each "&" and
+// - typing certain parameters that are always the same.
+const Switch: FC<{to: string}> = ({to, children}) => (
+  <a href={"#" + to.replace("||", "&pA=60&bS=2&MS&sA=3&sB=-4&").replaceAll("|", "&")}>
+    {children}
+  </a>
+);
+
+const Documentation = () => (
+  <div style={{margin: 10}}>
+    <h1>Some Notes On The "3-4-7 Miracle"</h1>
+    <p>
+      <i>(See this <a href="https://youtu.be/oEN0o9ZGmOM" target="_blank">
+        Mathologer video
+      </a> for an introduction.)</i>
+    </p>
+    <p>
+      Watch a <Switch to="cA=4|cB=3||C">bunch of points flying around</Switch>.
+      They can be either grouped
+      into <Switch to="cA=4|cB=3||E2B|C">4 rotating triangles</Switch> or
+      into <Switch to="cA=4|cB=3||E2R|C">3 rotating squares</Switch>.
+      Notice that all the points
+      follow <Switch to="cA=4|cB=3||C|T">a star-shaped trace</Switch>.
+    </p>
+    <p>
+      How does this work?
+    </p>
+    <p>
+      Let's go back to
+      the <Switch to="cA=4|cB=3||E2B|C">rotating triangles</Switch>.
+      We add
+      the <Switch to="cA=4|cB=3||A2B|E2B|C">centers</Switch> of
+      the rotating triangles.
+      These actually rotate around
+      a <Switch to="cA=4|cB=3||A1|A2B|E2B|C">common axis</Switch>.
+      Let's <Switch to="cA=4|cB=3||A1|H1B|A2B|E2B|C">connect
+      the triangle centers to the common axis</Switch> using some "clock hands".
+      For similarity we
+      also <Switch to="cA=4|cB=3||A1|H1B|A2B|H2B|C">
+        replace the triangle edges with "clock hands"</Switch>.
+      (You might have recognized that things like this
+      have been implemented in hardware
+      in <a href="https://www.youtube.com/results?search_query=calypso+ride" target="_blank">
+        one way</a> or <a href="https://www.youtube.com/results?search_query=scrambler+amusement+park+ride" target="_blank">
+        another</a>.)
+    </p>
+    <p>
+      We now concentrate on
+      a <Switch to="cA=1|cB=3||A1|H1B|A2B|H2B|C">single "satellite"</Switch> with
+      a <Switch to="cA=1|cB=1||A1|H1B|A2B|H2B|C">single "sub-satellite"</Switch>.
+      The motion of the sub-satellite is just the combination of two rotating "clock hands".
+      The "order" of the clock hands actually does not matter.
+      We could also <Switch to="cA=1|cB=1||A1|H1B|H1R|A2B|A2R|H2B|C">
+        let the shorter hand rotate around the central axis
+      </Switch> and <Switch to="cA=1|cB=1||A1|H1B|H1R|A2B|A2R|H2B|H2R|C">
+        mount the longer hand at the tip of the shorter one</Switch>.
+      (Remember the <a href="https://en.wikipedia.org/wiki/Euclidean_vector#Addition_and_subtraction" target="_blank">
+        parallelogram of vector addition</a>?)
+    </p>
+    <p>
+      We can go back the path that we came here, but now based on the
+      "red approach", that is, with the shorter clock hand(s) "A" in the center
+      and the longer hand(s) "B" in the satellites:
+      {} <Switch to="cA=1|cB=1||A1|H1R|A2R|H2R|C">1</Switch>,
+      {} <Switch to="cA=4|cB=1||A1|H1R|A2R|H2R|C">2</Switch>,
+      {} <Switch to="cA=4|cB=3||A1|H1R|A2R|H2R|C">3</Switch>,
+      {} <Switch to="cA=4|cB=3||A1|H1R|A2R|E2R|C">4</Switch>,
+      {} <Switch to="cA=4|cB=3||A1|A2R|E2R|C">5</Switch>,
+      {} <Switch to="cA=4|cB=3||A2R|E2R|C">6</Switch>,
+      {} <Switch to="cA=4|cB=3||E2R|C">7</Switch>.
+      So it's no more surprising that we can replace the 4 rotating triangles with 3 rotating
+      squares using the same points.
+    </p>
+    <p>
+      Now for the star-shaped trace.
+      Let's go back to
+      the <Switch to="cA=1|cB=1||A1|H1B|H1R|A2B|A2R|H2B|H2R|C">
+        vector addition parallelogram</Switch>,
+      where we now
+      {} <Switch to="cA=1|cB=1||A1|H1B|H1R|A2B|A2R|C">
+        omit the outer hands</Switch> for simplicity.
+      Notice that the red hand rotates slightly faster than the blue one.
+      (And they rotate in opposite directions.)
+      Whenever the two hands meet (that is, point in the same direction),
+      the resulting point (the "sub-sattelite") has its maximum distance
+      from the center.  From one such meeting point to the next the blue
+      hand does 3/7 of a full rotation and the red hand does 4/7.
+      This is because we have selected a speed ratio of 3:4 between the
+      two hands (actually -3:4 because one hand goes clockwise and the
+      other one goes counterclockwise).
+      This should explain why the trace is
+      a <Switch to="cA=1|cB=1||A1|H1B|H1R|A2B|A2R|C|T">
+        star with 7 corners</Switch>.
+    </p>
+    <p>
+      And why do all the other points in the original configuration
+      also follow the same trace?
+      This is because we have selected the rotation speeds in such a way
+      that the 3 red and 4 blue clock hands will always meet in the same
+      7 directions as we can
+      see <Switch to="cA=4|cB=3||A1|H1B|H1R|A2B|A2R|C|T">
+        here</Switch>.
+    </p>
+    <h1>Bells &amp; Whistles</h1>
+    <p>
+      Feel free to play with the bells and whistles to find other
+      intersting cases.
+      Most of the configuration UI should be easy to understand,
+      at least with some experimentation.
+      <br/>
+      Some things need explanation, however:
+    </p>
+    <ul>
+      <li>
+        If you untick the "manual speedup", then the relative speeds
+        will be chosen automatically in a way appropriate for the numbers
+        of corners selected above.
+        (But notice that this only works completely if the numbers of
+        corners are coprime.)
+      </li>
+      <li>
+        If the relative speeds do not fit with the numbers of corners,
+        only the "primary point" (the one with the white dot) follows
+        the trace.
+      </li>
+      <li>
+        If the "speedups" (factors on top of the base speed) are
+        non-integral, the trace might not be closed (as far as we draw
+        it).
+      </li>
+      <li>
+        The base speed is measured in rounds per minute.
+      </li>
+      <li>
+        The configuration is reflected in the URL.  This allows you
+        to bookmark your favorite configs, and you can use your
+        browser's "back" and "forward" buttons as "undo" and "redo"
+        operations.
+      </li>
+    </ul>
+  </div>
+);
+
 function App() {
   const [options, setOptionsRaw] = useState(initialOptions);
 
@@ -478,12 +622,15 @@ function App() {
   return (
     <ProvideDisplayOptions value={options} setter={setOptions}>
       <ProvideRounds speedRef={speedRef}>
-        <div style={{display: "flex", flexFlow: "row wrap", alignItems: "top"}}>
-          <svg viewBox="-1.1 -1.1 2.2 2.2" width="600" height="600">
-            {options.showTrace && (<Trace/>)}
-            <MovingParts/>
-          </svg>
-          <Config/>
+        <div>
+          <div style={{display: "flex", flexFlow: "row wrap", alignItems: "top"}}>
+            <svg viewBox="-1.1 -1.1 2.2 2.2" width="600" height="600">
+              {options.showTrace && (<Trace/>)}
+              <MovingParts/>
+            </svg>
+            <Config/>
+          </div>
+          <Documentation/>
         </div>
       </ProvideRounds>
     </ProvideDisplayOptions>
