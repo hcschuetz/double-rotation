@@ -159,6 +159,12 @@ type Setter<T> = (update: T | ((old: T) => T)) => void;
 const OptionsCtx: Context<Options> = createContext(initialOptions);
 const SetOptionsCtx: Context<Setter<Options>> = createContext((x: any) => {});
 
+/**
+ * Provide the current options in context `OptionsCtx` and the setter function
+ * in context `SetOptionsCtx`.
+ *
+ * Notice that this component does not manage the actual state.
+ */
 const ProvideOptions: FC<{value: Options, setter: Setter<Options>}> =
   ({value, setter, children}) => (
     <OptionsCtx.Provider value={value}>
@@ -168,12 +174,22 @@ const ProvideOptions: FC<{value: Options, setter: Setter<Options>}> =
     </OptionsCtx.Provider>
   );
 
-// The numeric value managed by Rounds/SetRounds is the "simulated time"
-// (similar to a position in an audio or video recording).
-// With a speed of 1 a "round" takes a minute.
 const Rounds: Context<number> = createContext(0);
 const SetRounds: Context<Setter<number>> = createContext((x: any) => {});
 
+/**
+ * Manage a state containing the "simulated time"
+ * (similar to a position in an audio or video recording).
+ *
+ * The simulated time is measured in "rounds".  With a speed of 1 a round takes
+ * a minute.  Speeds below/above 1 correspond to slow motion/fast motion,
+ * a speed of 0 stops the simulated time.
+ *
+ * The speed is given as the current value of property `speedRef`.
+ *
+ * The current simulated time is provided in context `Rounds`.  A setter for
+ * the simulated time is provided in context `SetRounds`.
+ */
 const ProvideRounds: FC<{speedRef: {current: number}}> = ({speedRef, children}) => {
   const [rounds, setRounds] = useState(0);
 
@@ -223,7 +239,7 @@ const polar = (r: number, turns: number): Point => ([
   r * Math.sin(turns * TAU),
 ]);
 
-/** `maptToNode(values, f)` is like `values.map(f)`, but also provides `key` attributes */
+/** `mapToElements(values, f)` is like `values.map(f)`, but also provides `key` attributes */
 const mapToElements = <T,>(values: T[], f: (value: T, i: number, a: T[]) => ReactNode): JSX.Element[] =>
   values.map((point, i, a) => (<Fragment key={i}>{f(point, i, a)}</Fragment>));
 
@@ -252,6 +268,10 @@ const dot = ([cx, cy]: Point, color: string, radius: number, showMark: boolean):
 
 const center: Point = [0, 0];
 
+/** instantiate the referenced SVG definition several times with the given offsets
+ *
+ * (This function was not called `useWithOffset` to avoid confusion with React hooks.)
+ */
 const instantiateWithOffsets = (points: Point[], href: string): ReactNode =>
   mapToElements(points, ([x, y]) => (
     <use href={href} transform={`translate(${x} ${y})`} />
