@@ -650,7 +650,7 @@ const Documentation = () => (
       Notice that the {red} hand rotates slightly faster than the {blue} one.
       (And they rotate in opposite directions.)
       Whenever the two hands meet (that is, point in the same direction),
-      the resulting point (the "sub-sattelite") has its maximum distance
+      the resulting point (the "sub-satelite") has its maximum distance
       from the center.  From one such meeting point to the next the {blue}
       hand does 3/7 of a full rotation and the {red} hand does 4/7.
       This is because we have selected a speed ratio of 3:4 between the
