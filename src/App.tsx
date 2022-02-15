@@ -1,8 +1,41 @@
 import {
   Context, createContext, FC, Fragment, ReactNode,
   useContext, useEffect, useRef, useState
-} from 'react';
-import './App.css';
+} from "react";
+import "./App.css";
+
+// -----------------------------------------------------------------------------
+// Tunable parameters
+// We might make some of these configurable by the user
+
+const maxCorners = 10;
+
+const maxBaseSpeed = 10;
+const baseSpeedStep = 0.1;
+
+const manualStep = 0.001;
+
+const maxSpeedup = 10;
+const speedupStep = 0.1;
+
+const primaryStrokeWidth = 0.02;
+const secondaryStrokeWidth = 0.01;
+const helperStrokeWidth = 0.01;
+
+const primaryDot = 0.03;
+const secondaryDot = 0.03;
+const tertiaryDot = 0.02;
+const markSize = 0.01;
+
+const blue = "blue";
+const red = "red";
+const grey = "lightgrey";
+
+// TODO: more constants?
+
+const traceSteps = 1000; // How many segments to use for a trace.
+
+// -----------------------------------------------------------------------------
 
 type Options = {
   cornersA: number, cornersB: number,
@@ -14,11 +47,15 @@ type Options = {
   showPrimaryAxis: boolean,
   showBluePrimaryHands: boolean, showRedPrimaryHands: boolean,
   showBluePrimaryEdges: boolean, showRedPrimaryEdges: boolean,
+  showBluePrimaryCircle: boolean, showRedPrimaryCircle: boolean,
   showBlueSecondaryAxes: boolean, showRedSecondaryAxes: boolean,
   showBlueSecondaryHands: boolean, showRedSecondaryHands: boolean,
   showBlueSecondaryEdges: boolean, showRedSecondaryEdges: boolean,
+  showBlueSecondaryCircles: boolean, showRedSecondaryCircles: boolean,
   showCorners: boolean,
   showTrace: boolean,
+  showInnerCircle: boolean,
+  showOuterCircle: boolean,
 };
 
 const initialOptions: Options = {
@@ -32,16 +69,19 @@ const initialOptions: Options = {
   showPrimaryAxis: false, 
   showBluePrimaryHands: false, showRedPrimaryHands: false,
   showBluePrimaryEdges: false, showRedPrimaryEdges: false,
+  showBluePrimaryCircle: false, showRedPrimaryCircle: false,
   showBlueSecondaryAxes: false, showRedSecondaryAxes: false,
   showBlueSecondaryHands: false, showRedSecondaryHands: false,
   showBlueSecondaryEdges: true, showRedSecondaryEdges: true,
+  showBlueSecondaryCircles: false, showRedSecondaryCircles: false,
   showCorners: true,
   showTrace: true,
+  showInnerCircle: false,
+  showOuterCircle: false,
 };
 
 // -----------------------------------------------------------------------------
-// Support for serializing Options (into the URL hash section) and for
-// deserializing again
+// Support for serializing and deserializing Options (to/from the URL hash)
 
 const flag2option: {[k:string]: string} = {};
 const option2flag: {[k:string]: string} = {};
@@ -52,14 +92,20 @@ H1B:b:showBluePrimaryHands
 H1R:b:showRedPrimaryHands
 E1B:b:showBluePrimaryEdges
 E1R:b:showRedPrimaryEdges
+C1B:b:showBluePrimaryCircle
+C1R:b:showRedPrimaryCircle
 A2B:b:showBlueSecondaryAxes
 A2R:b:showRedSecondaryAxes
 H2B:b:showBlueSecondaryHands
 H2R:b:showRedSecondaryHands
 E2B:b:showBlueSecondaryEdges
 E2R:b:showRedSecondaryEdges
+C2B:b:showBlueSecondaryCircles
+C2R:b:showRedSecondaryCircles
 C  :b:showCorners
 T  :b:showTrace
+Ci :b:showInnerCircle
+Co :b:showOuterCircle
 cA :n:cornersA
 cB :n:cornersB
 pA :n:percentageA
@@ -105,20 +151,21 @@ type FilteredKeys<T, U> = { [P in keyof T]: T[P] extends U ? P : never }[keyof T
 type NumericOption = FilteredKeys<Options, number>;
 type BooleanOption = FilteredKeys<Options, boolean>;
 
+/** type of the second return value of useState(...) */
 type Setter<T> = (update: T | ((old: T) => T)) => void;
 
-// All these contexts have no reasonable default values.  So we just provide
+// These contexts have no reasonable default values.  So we just provide
 // some dummy values of the appropriate types to createContext(...).
-const DisplayOptions: Context<Options> = createContext(initialOptions);
-const SetDisplayOptions: Context<Setter<Options>> = createContext((x: any) => {});
+const OptionsCtx: Context<Options> = createContext(initialOptions);
+const SetOptionsCtx: Context<Setter<Options>> = createContext((x: any) => {});
 
-const ProvideDisplayOptions: FC<{value: Options, setter: Setter<Options>}> =
+const ProvideOptions: FC<{value: Options, setter: Setter<Options>}> =
   ({value, setter, children}) => (
-    <DisplayOptions.Provider value={value}>
-      <SetDisplayOptions.Provider value={setter}>
+    <OptionsCtx.Provider value={value}>
+      <SetOptionsCtx.Provider value={setter}>
         {children}
-      </SetDisplayOptions.Provider>
-    </DisplayOptions.Provider>
+      </SetOptionsCtx.Provider>
+    </OptionsCtx.Provider>
   );
 
 // The numeric value managed by Rounds/SetRounds is the "simulated time"
@@ -151,7 +198,7 @@ const ProvideRounds: FC<{speedRef: {current: number}}> = ({speedRef, children}) 
 
     requestAnimationFrame(update);
     return () => { terminated = true; }
-  }, []);
+  }, [speedRef]);
 
   return (
     <Rounds.Provider value={rounds}>
@@ -162,40 +209,55 @@ const ProvideRounds: FC<{speedRef: {current: number}}> = ({speedRef, children}) 
   );
 };
 
+/** Creates an array [0, 1, 2, ..., n-1] */
 const indices = (n: number): number[] => Array(n).fill(undefined).map((_,i) => i);
 
+/** 2 PI; see https://en.wikipedia.org/wiki/Turn_(angle)#Tau_proposals) */
 const TAU = 2 * Math.PI;
 
 type Point = [number, number];
 
+/** convert from polar to cartesian coordinates; angle given in full turns */
 const polar = (r: number, turns: number): Point => ([
   r * Math.cos(turns * TAU),
   r * Math.sin(turns * TAU),
 ]);
 
-const line = (p1: Point, p2: Point, color: string, width: number): JSX.Element => (
-  <line stroke={color} strokeWidth={width}
-    x1={p1[0]} y1={p1[1]} x2={p2[0]} y2={p2[1]}
-  />
+/** `maptToNode(values, f)` is like `values.map(f)`, but also provides `key` attributes */
+const mapToNode = <T,>(values: T[], f: (value: T, i: number, a: T[]) => ReactNode): ReactNode =>
+  values.map((point, i, a) => (<Fragment key={i}>{f(point, i, a)}</Fragment>));
+
+/** radial lines ("clock hands") from the center to the points */
+const hands = (points: Point[]): ReactNode => (
+  <path strokeLinecap="round" d={points.map(([x,y]) => `M 0 0 L ${x} ${y}`).join(" ")}/>
 );
 
-const dot = (
-  point: Point, color: string, radius: number, showMark: boolean
-): JSX.Element => (<>
-  <circle r={radius} fill={color} cx={point[0]} cy={point[1]}/>
+/** a polygon through the points */
+const polygon = (points: Point[]): ReactNode => (
+  <polygon points={points.map(([x,y]) => `${x},${y}`).join(" ")} strokeLinejoin="round" fill="none"/>
+);
+
+/** a circle around the center with the given radius */
+const circle = (radius: number): ReactNode => (
+  <circle fill="none" r={radius}/>
+);
+
+/** a dot at some position, actually a  */
+const dot = ([cx, cy]: Point, color: string, radius: number, showMark: boolean): ReactNode => (<>
+  <circle r={radius} fill={color} cx={cx} cy={cy}/>
   {showMark && (
-    <circle fill="white" r={0.01} cx={point[0]} cy={point[1]}/>
+    <circle fill="white" r={markSize} cx={cx} cy={cy}/>
   )}
 </>);
 
 const center: Point = [0, 0];
 
-const forEachHand = (
-  hands: Point[],
-  f: (point: Point, i: number) => ReactNode,
-): JSX.Element[] =>
-  hands.map((point, i) => (<Fragment key={i}>{f(point, i)}</Fragment>));
+const instantiateWithOffsets = (points: Point[], href: string): ReactNode =>
+  mapToNode(points, ([x, y]) => (
+    <use href={href} transform={`translate(${x} ${y})`} />
+  ));
 
+/** extract/compute some values from options */
 function getDimensions(options: Options) {
   const cornersA = options.cornersA;
   const cornersB = options.cornersB;
@@ -207,76 +269,63 @@ function getDimensions(options: Options) {
 }
 
 function MovingParts(): JSX.Element {
-  const options = useContext(DisplayOptions);
+  const options = useContext(OptionsCtx);
   const rounds = useContext(Rounds);
 
   const {cornersA, cornersB, lengthA, lengthB, speedupA, speedupB} =
     getDimensions(options);
 
-  const handsA: Point[] =
+  const pointsA: Point[] =
     indices(cornersA).map(i => polar(lengthA, speedupA * rounds + i / cornersA));
-  const handsB: Point[] =
+  const pointsB: Point[] =
     indices(cornersB).map(j => polar(lengthB, speedupB * rounds + j / cornersB));
 
-  const corners: Point[][] =
-    handsA.map(([xa, ya]) => handsB.map(([xb, yb]): Point => ([xa+xb, ya+yb])));
-
-  const forEachCorner = (f: (i: number, j: number) => ReactNode): JSX.Element[] =>
-    indices(cornersA).map(i => (
-      <Fragment key={i}>
-        {indices(cornersB).map(j => (
-          <Fragment key={j}>
-            {f(i, j)}
-          </Fragment>
-        ))}
-      </Fragment>
-    ));
-
   return (<>
-    {options.showBluePrimaryHands &&
-      forEachHand(handsA, (point, i) => line(center, point, "blue", 0.02))
-    }
-    {options.showRedPrimaryHands &&
-      forEachHand(handsB, (point, j) => line(center, point, "red", 0.02))
-    }
-    {options.showBluePrimaryEdges &&
-      forEachHand(handsA, (point, i) => line(point, handsA[(i+1)%cornersA], "blue", 0.02))
-    }
-    {options.showRedPrimaryEdges &&
-      forEachHand(handsB, (point, j) => line(point, handsB[(j+1)%cornersB], "red", 0.02))
-    }
-    {options.showBlueSecondaryHands &&
-      forEachCorner((i, j) => line(corners[i][j], handsA[i], "blue", 0.01))
-    }
-    {options.showRedSecondaryHands &&
-      forEachCorner((i, j) => line(corners[i][j], handsB[j], "red", 0.01))
-    }
-    {options.showBlueSecondaryEdges &&
-      forEachCorner((i, j) => line(corners[i][j], corners[i][(j+1)%cornersB], "blue", 0.01))
-    }
-    {options.showRedSecondaryEdges &&
-      forEachCorner((i, j) => line(corners[i][j], corners[(i+1)%cornersA][j], "red", 0.01))
-    }
-    {options.showPrimaryAxis &&
-      dot(center, "black", 0.03, true)
-    }
-    {options.showBlueSecondaryAxes &&
-      forEachHand(handsA, (point, i) => dot(point, "blue", 0.03, i === 0))
-    }
-    {options.showRedSecondaryAxes &&
-      forEachHand(handsB, (point, j) => dot(point, "red", 0.03, j === 0))
-    }
+    <g strokeWidth={primaryStrokeWidth} stroke={blue}>
+      {options.showBluePrimaryHands  && hands(pointsA)}
+      {options.showBluePrimaryEdges  && polygon(pointsA)}
+      {options.showBluePrimaryCircle && circle(lengthA) /* actually not moving */}
+    </g>
+    <g strokeWidth={primaryStrokeWidth} stroke={red}>
+      {options.showRedPrimaryHands   && hands(pointsB)}
+      {options.showRedPrimaryEdges   && polygon(pointsB)}
+      {options.showRedPrimaryCircle  && circle(lengthB) /* actually not moving */}
+    </g>
+
+    <defs>
+      <g id="blueSecondary" strokeWidth={secondaryStrokeWidth} stroke={blue}>
+        {options.showBlueSecondaryHands   && hands(pointsB)}
+        {options.showBlueSecondaryEdges   && polygon(pointsB)}
+        {options.showBlueSecondaryCircles && circle(lengthB)}
+      </g>
+      <g id="redSecondary" strokeWidth={secondaryStrokeWidth} stroke={red}>
+        {options.showRedSecondaryHands    && hands(pointsA)}
+        {options.showRedSecondaryEdges    && polygon(pointsA)}
+        {options.showRedSecondaryCircles  && circle(lengthA)}
+      </g>
+    </defs>
+    {instantiateWithOffsets(pointsA, "#blueSecondary")}
+    {instantiateWithOffsets(pointsB, "#redSecondary")}
+
+    {options.showPrimaryAxis       && dot(center, "black", primaryDot, true) /* actually not moving */}
+    {options.showBlueSecondaryAxes && mapToNode(pointsA, (p, i) => dot(p, blue, secondaryDot, i === 0))}
+    {options.showRedSecondaryAxes  && mapToNode(pointsB, (p, j) => dot(p, red , secondaryDot, j === 0))}
     {options.showCorners &&
-      forEachCorner((i, j) => dot(corners[i][j], "black", 0.02, i === 0 && j === 0))
+      mapToNode(pointsA, ([xa, ya], i) =>
+        mapToNode(pointsB, ([xb, yb], j) =>
+          dot([xa+xb, ya+yb], "black", tertiaryDot, i === 0 && j === 0)
+        )
+      )
     }
   </>);
 }
 
-// How many segments to use for a trace. (A parameter that can be tuned.)
-const traceSteps = 1000;
-
 function Trace(): JSX.Element {
-  const options = useContext(DisplayOptions);
+  const options = useContext(OptionsCtx);
+  if (!options.showTrace) {
+    return <></>;
+  }
+
   const {lengthA, lengthB, speedupA, speedupB} = getDimensions(options);
 
   const trace = indices(traceSteps+1).map(i => {
@@ -287,16 +336,39 @@ function Trace(): JSX.Element {
   }).join(" ");
 
   return (
-    <polyline points={trace} stroke="lightgrey" strokeWidth={0.01} fill="none"/>
+    <polyline
+      points={trace} stroke={grey} strokeWidth={helperStrokeWidth}
+      strokeLinejoin="round" strokeLinecap="round" fill="none"
+    />
   );
 }
 
+function Circles(): JSX.Element {
+  const options = useContext(OptionsCtx);
+  const {lengthA, lengthB} = getDimensions(options);
+
+  return (
+    <g strokeWidth={helperStrokeWidth} stroke={grey}>
+      {options.showInnerCircle && circle(Math.abs(lengthA-lengthB))}
+      {options.showOuterCircle && circle(lengthA+lengthB)}
+    </g>
+  );
+}
+
+const Graphic = (): JSX.Element => (
+  <svg viewBox="-1.1 -1.1 2.2 2.2" width="600" height="600">
+    <Trace/>
+    <Circles/>
+    <MovingParts/>
+  </svg>
+);
+
 function Config(): JSX.Element {
-  const options = useContext(DisplayOptions);
-  const setOptions = useContext(SetDisplayOptions);
+  const options = useContext(OptionsCtx);
+  const setOptions = useContext(SetOptionsCtx);
   const setRounds = useContext(SetRounds);
 
-  const flag = (name: BooleanOption): JSX.Element => (
+  const flag = (name: BooleanOption): ReactNode => (
     <input type="checkbox"
       checked={options[name]}
       onChange={e => setOptions(options => ({...options, [name]: e.target.checked}))}
@@ -304,7 +376,7 @@ function Config(): JSX.Element {
   );
   const slider = (
     name: NumericOption, min: number, max: number, step: number = 1
-  ): JSX.Element => (
+  ): ReactNode => (
     <input type="range" min={min} max={max} step={step}
       value={options[name]}
       onChange={e => setOptions(options => ({...options, [name]: Number(e.target.value)}))}
@@ -321,7 +393,7 @@ function Config(): JSX.Element {
           <tr>
             <th>#corners A</th>
             <td>
-              {slider("cornersA", 1, 7)}
+              {slider("cornersA", 1, maxCorners)}
               <br/>
               <span>{options.cornersA}</span>
             </td>
@@ -329,7 +401,7 @@ function Config(): JSX.Element {
           <tr>
             <th>#corners B</th>
             <td>
-              {slider("cornersB", 1, 7)}
+              {slider("cornersB", 1, maxCorners)}
               <br/>
               <span>{options.cornersB}</span>
             </td>
@@ -340,12 +412,27 @@ function Config(): JSX.Element {
               {slider("percentageA", 0, 100)}
               <br/>
               <span>A: {options.percentageA}%&emsp;B: {100 - options.percentageA}%</span>
+              <br/>
+              <button onClick={() => {
+                let {speedupA, speedupB} = getDimensions(options);
+                if (speedupA === 0 && speedupB === 0) {
+                  alert("Use non-zero speedups to make this work");
+                  return;
+                }
+                if (speedupA === speedupB || speedupA === 0 || speedupB === 0) {
+                  alert("Use different and non-zero speedups to see some effect");
+                }
+                speedupA = Math.abs(speedupA);
+                speedupB = Math.abs(speedupB);
+                const percentageA = Math.round(100 * speedupB / (speedupB + speedupA));
+                setOptions(options => ({...options, percentageA}));
+              }}>adjust to rotation speeds</button>
             </td>
           </tr>
           <tr>
             <th>base speed</th>
             <td>
-              {slider("baseSpeed", -10, 10, 0.1)}
+              {slider("baseSpeed", -maxBaseSpeed, maxBaseSpeed, baseSpeedStep)}
               <br/>
               <div style={{display: "inline-block"}}>
                 <div>{options.baseSpeed}</div>
@@ -355,11 +442,11 @@ function Config(): JSX.Element {
                   }>stop</button>
                 </div>
                 <div style={{marginTop: "5px"}}>
-                  <button onClick={() => setRounds(rounds => rounds - 0.001)}>&lt;</button>
+                  <button onClick={() => setRounds(rounds => rounds - manualStep)}>&lt;</button>
                   &emsp;
                   <button onClick={() => setRounds(0)}>reset</button>
                   &emsp;
-                  <button onClick={() => setRounds(rounds => rounds + 0.001)}>&gt;</button>
+                  <button onClick={() => setRounds(rounds => rounds + manualStep)}>&gt;</button>
                 </div>
               </div>
             </td>
@@ -368,11 +455,11 @@ function Config(): JSX.Element {
             <th>manual speedup</th>
             <td>{flag("manualSpeedup")}</td>
           </tr>
-          {options.manualSpeedup && (<Fragment>
+          {options.manualSpeedup && (<>
             <tr>
               <th>speedup A</th>
               <td>
-                {slider("speedupA", -7, 7, 0.1)}
+                {slider("speedupA", -maxSpeedup, maxSpeedup, speedupStep)}
                 <br/>
                 <span>{options.speedupA}</span>
               </td>
@@ -380,12 +467,12 @@ function Config(): JSX.Element {
             <tr>
               <th>speedup B</th>
               <td>
-                {slider("speedupB", -7, 7, 0.1)}
+                {slider("speedupB", -maxSpeedup, maxSpeedup, speedupStep)}
                 <br/>
                 <span>{options.speedupB}</span>
               </td>
             </tr>
-          </Fragment>)}
+          </>)}
         </tbody>
       </table>
       <table style={{display: "inline-table"}}>
@@ -399,8 +486,8 @@ function Config(): JSX.Element {
           </tr>
           <tr>
             <th></th>
-            <td>blue</td>
-            <td>red</td>
+            <th style={{color: blue}}>{blue}</th>
+            <th style={{color: red}}>{red}</th>
           </tr>
           <tr>
             <th>primary hands</th>
@@ -411,6 +498,11 @@ function Config(): JSX.Element {
             <th>primary edges</th>
             <td>{flag("showBluePrimaryEdges")}</td>
             <td>{flag("showRedPrimaryEdges")}</td>
+          </tr>
+          <tr>
+            <th>primary circle</th>
+            <td>{flag("showBluePrimaryCircle")}</td>
+            <td>{flag("showRedPrimaryCircle")}</td>
           </tr>
           <tr>
             <th>secondary axes</th>
@@ -428,6 +520,11 @@ function Config(): JSX.Element {
             <td>{flag("showRedSecondaryEdges")}</td>
           </tr>
           <tr>
+            <th>secondary circles</th>
+            <td>{flag("showBlueSecondaryCircles")}</td>
+            <td>{flag("showRedSecondaryCircles")}</td>
+          </tr>
+          <tr>
             <th>ends/corners</th>
             <td colSpan={2}>{flag("showCorners")}</td>
           </tr>
@@ -435,34 +532,54 @@ function Config(): JSX.Element {
             <th>trace</th>
             <td colSpan={2}>{flag("showTrace")}</td>
           </tr>
+          <tr>
+            <th>inner circle</th>
+            <td colSpan={2}>{flag("showInnerCircle")}</td>
+          </tr>
+          <tr>
+            <th>outer circle</th>
+            <td colSpan={2}>{flag("showOuterCircle")}</td>
+          </tr>
         </tbody>
       </table>
     </div>
     )
 }
 
-// Shorthand for links to save
-// - typing "&amp;" for each "&" and
-// - typing certain parameters that are always the same.
+/** Shorthand for "configuration-change links" to save
+ * - typing "&amp;amp;" for each "&amp;" and
+ * - typing certain parameters that are always the same in the examples. */
 const Switch: FC<{to: string}> = ({to, children}) => (
   <a href={"#" + to.replace("||", "&pA=60&bS=2&MS&sA=3&sB=-4&").replaceAll("|", "&")}>
     {children}
   </a>
 );
 
+/** Shorthand for links to different pages (in a different window/tab) */
+const RemoteRef: FC<{to: string}> = ({to, children}) => (
+  <a href={to} target="_blank" rel="noreferrer">
+    {children}
+  </a>
+);
+
+const hashSign = "#"; // introduced constant to silence eslint
+
 const Documentation = () => (
   <div style={{margin: 10}}>
     <h1>Some Notes On The "3-4-7 Miracle"</h1>
     <p>
-      <i>(See this <a href="https://youtu.be/oEN0o9ZGmOM" target="_blank">
-        Mathologer video
-      </a> for an introduction.)</i>
+      <i>
+        (You might want to have a look at this {}
+        <RemoteRef to="https://youtu.be/oEN0o9ZGmOM">Mathologer video</RemoteRef> {}
+        for an introduction,
+        but you can also start with the text here and click the links.)
+      </i>
     </p>
     <p>
       Watch a <Switch to="cA=4|cB=3||C">bunch of points flying around</Switch>.
-      They can be either grouped
-      into <Switch to="cA=4|cB=3||E2B|C">4 rotating triangles</Switch> or
-      into <Switch to="cA=4|cB=3||E2R|C">3 rotating squares</Switch>.
+      They can be grouped into
+      either <Switch to="cA=4|cB=3||E2B|C">4 rotating triangles</Switch> or
+      {} <Switch to="cA=4|cB=3||E2R|C">3 rotating squares</Switch>.
       Notice that all the points
       follow <Switch to="cA=4|cB=3||C|T">a star-shaped trace</Switch>.
     </p>
@@ -478,15 +595,22 @@ const Documentation = () => (
       These actually rotate around
       a <Switch to="cA=4|cB=3||A1|A2B|E2B|C">common axis</Switch>.
       Let's <Switch to="cA=4|cB=3||A1|H1B|A2B|E2B|C">connect
-      the triangle centers to the common axis</Switch> using some "clock hands".
+      the triangle centers to the common axis</Switch> using some "clock hands"
+      or "windmill blades".
       For similarity we
       also <Switch to="cA=4|cB=3||A1|H1B|A2B|H2B|C">
         replace the triangle edges with "clock hands"</Switch>.
       (You might have recognized that things like this
       have been implemented in hardware
-      in <a href="https://www.youtube.com/results?search_query=calypso+ride" target="_blank">
-        one way</a> or <a href="https://www.youtube.com/results?search_query=scrambler+amusement+park+ride" target="_blank">
-        another</a>.)
+      in <RemoteRef to="https://www.youtube.com/results?search_query=calypso+ride">
+        one way
+      </RemoteRef> {}
+      <RemoteRef to="https://www.youtube.com/results?search_query=breakdance+ride">
+        or
+      </RemoteRef> {}
+      <RemoteRef to="https://www.youtube.com/results?search_query=scrambler+amusement+park+ride">
+        another
+      </RemoteRef>.)
     </p>
     <p>
       We now concentrate on
@@ -498,12 +622,12 @@ const Documentation = () => (
         let the shorter hand rotate around the central axis
       </Switch> and <Switch to="cA=1|cB=1||A1|H1B|H1R|A2B|A2R|H2B|H2R|C">
         mount the longer hand at the tip of the shorter one</Switch>.
-      (Remember the <a href="https://en.wikipedia.org/wiki/Euclidean_vector#Addition_and_subtraction" target="_blank">
-        parallelogram of vector addition</a>?)
+      (Remember the <RemoteRef to="https://en.wikipedia.org/wiki/Euclidean_vector#Addition_and_subtraction">
+        parallelogram of vector addition</RemoteRef>?)
     </p>
     <p>
       We can go back the path that we came here, but now based on the
-      "red approach", that is, with the shorter clock hand(s) "A" in the center
+      "{red} approach", that is, with the shorter clock hand(s) "A" in the center
       and the longer hand(s) "B" in the satellites:
       {} <Switch to="cA=1|cB=1||A1|H1R|A2R|H2R|C">1</Switch>,
       {} <Switch to="cA=4|cB=1||A1|H1R|A2R|H2R|C">2</Switch>,
@@ -523,12 +647,12 @@ const Documentation = () => (
       where we now
       {} <Switch to="cA=1|cB=1||A1|H1B|H1R|A2B|A2R|C">
         omit the outer hands</Switch> for simplicity.
-      Notice that the red hand rotates slightly faster than the blue one.
+      Notice that the {red} hand rotates slightly faster than the {blue} one.
       (And they rotate in opposite directions.)
       Whenever the two hands meet (that is, point in the same direction),
       the resulting point (the "sub-sattelite") has its maximum distance
-      from the center.  From one such meeting point to the next the blue
-      hand does 3/7 of a full rotation and the red hand does 4/7.
+      from the center.  From one such meeting point to the next the {blue}
+      hand does 3/7 of a full rotation and the {red} hand does 4/7.
       This is because we have selected a speed ratio of 3:4 between the
       two hands (actually -3:4 because one hand goes clockwise and the
       other one goes counterclockwise).
@@ -540,27 +664,26 @@ const Documentation = () => (
       And why do all the other points in the original configuration
       also follow the same trace?
       This is because we have selected the rotation speeds in such a way
-      that the 3 red and 4 blue clock hands will always meet in the same
+      that the 3 {red} and 4 {blue} clock hands will always meet in the same
       7 directions as we can
       see <Switch to="cA=4|cB=3||A1|H1B|H1R|A2B|A2R|C|T">
         here</Switch>.
     </p>
     <h1>Bells &amp; Whistles</h1>
     <p>
-      Feel free to play with the bells and whistles to find other
-      intersting cases.
+      Feel free to play with the configuration to find other interesting cases.
       Most of the configuration UI should be easy to understand,
       at least with some experimentation.
       <br/>
-      Some things need explanation, however:
+      Nevertheless some explanation may be helpful:
     </p>
     <ul>
       <li>
         If you untick the "manual speedup", then the relative speeds
         will be chosen automatically in a way appropriate for the numbers
         of corners selected above.
-        (But notice that all points follow the same trace only if the numbers of
-        corners are coprime.)
+        (But notice that all points follow the same trace only if the two
+        numbers of corners are coprime.)
       </li>
       <li>
         If the relative speeds do not fit with the numbers of corners,
@@ -576,16 +699,35 @@ const Documentation = () => (
         The base speed is measured in rounds per minute.
       </li>
       <li>
+        Clicking the button "adjust to rotation speeds" will adjust the hand
+        lengths according to the (manual or automatic) rotation speeds in such a
+        way that
+        <ul>
+          <li>
+            the secondary circles roll in the outer circle without slip and
+          </li>
+          <li>
+            the star-shaped trace gets sharp bends,
+          </li>
+        </ul>
+        assuming that the two rotations are in opposite directions.
+        <br/>
+        If the rotations are in the same direction, the sharp bends of the trace
+        point inward and the secondary circles roll around the inner circle
+        without slip.
+      </li>
+      <li>
         The configuration is reflected in the URL.  This allows you
-        to bookmark your favorite configs, and you can use your
+        to bookmark your favorite configurations, and you can use your
         browser's "back" and "forward" buttons as "undo" and "redo"
         operations.
+        Default values are used if <a href={hashSign}>the URL lacks a configuration</a>.
       </li>
     </ul>
   </div>
 );
 
-function App() {
+function App(): JSX.Element {
   const [options, setOptionsRaw] = useState(initialOptions);
 
   // We intercept setOptions to serialize new options to the URL hash.
@@ -612,20 +754,17 @@ function App() {
   const speedRef = useRef(0);
   speedRef.current = options.baseSpeed;
   return (
-    <ProvideDisplayOptions value={options} setter={setOptions}>
+    <ProvideOptions value={options} setter={setOptions}>
       <ProvideRounds speedRef={speedRef}>
         <div>
           <div style={{display: "flex", flexFlow: "row wrap", alignItems: "top"}}>
-            <svg viewBox="-1.1 -1.1 2.2 2.2" width="600" height="600">
-              {options.showTrace && (<Trace/>)}
-              <MovingParts/>
-            </svg>
+            <Graphic/>
             <Config/>
           </div>
           <Documentation/>
         </div>
       </ProvideRounds>
-    </ProvideDisplayOptions>
+    </ProvideOptions>
   );
 }
 
