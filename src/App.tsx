@@ -600,16 +600,9 @@ const Documentation = () => (
       For similarity we
       also <Switch to="cA=4|cB=3||A1|H1B|A2B|H2B|C">
         replace the triangle edges with "clock hands"</Switch>.
-      (You might have recognized that things like this
-      have been implemented in hardware
-      in <RemoteRef to="https://www.youtube.com/results?search_query=calypso+ride">
-        one way
-      </RemoteRef> {}
-      <RemoteRef to="https://www.youtube.com/results?search_query=breakdance+ride">
-        or
-      </RemoteRef> {}
-      <RemoteRef to="https://www.youtube.com/results?search_query=scrambler+amusement+park+ride">
-        another
+      (You might have recognized that things like this have been 
+      {} <RemoteRef to="https://www.youtube.com/results?search_query=calypso+OR+scrambler+OR+breakdance+fun+OR+amusement+OR+fairground+ride">
+        implemented in hardware
       </RemoteRef>.)
     </p>
     <p>
