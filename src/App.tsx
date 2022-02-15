@@ -724,6 +724,9 @@ const Documentation = () => (
         Default values are used if <a href={hashSign}>the URL lacks a configuration</a>.
       </li>
     </ul>
+    <h1>Source code</h1>
+    The source code for this application is available
+    {} <RemoteRef to="https://github.com/hcschuetz/double-rotation">here</RemoteRef>.
   </div>
 );
 
