@@ -224,7 +224,7 @@ const polar = (r: number, turns: number): Point => ([
 ]);
 
 /** `maptToNode(values, f)` is like `values.map(f)`, but also provides `key` attributes */
-const mapToNode = <T,>(values: T[], f: (value: T, i: number, a: T[]) => ReactNode): ReactNode =>
+const mapToElements = <T,>(values: T[], f: (value: T, i: number, a: T[]) => ReactNode): JSX.Element[] =>
   values.map((point, i, a) => (<Fragment key={i}>{f(point, i, a)}</Fragment>));
 
 /** radial lines ("clock hands") from the center to the points */
@@ -242,7 +242,7 @@ const circle = (radius: number): ReactNode => (
   <circle fill="none" r={radius}/>
 );
 
-/** a dot at some position, actually a  */
+/** a dot at some position (actually a circle) */
 const dot = ([cx, cy]: Point, color: string, radius: number, showMark: boolean): ReactNode => (<>
   <circle r={radius} fill={color} cx={cx} cy={cy}/>
   {showMark && (
@@ -253,7 +253,7 @@ const dot = ([cx, cy]: Point, color: string, radius: number, showMark: boolean):
 const center: Point = [0, 0];
 
 const instantiateWithOffsets = (points: Point[], href: string): ReactNode =>
-  mapToNode(points, ([x, y]) => (
+  mapToElements(points, ([x, y]) => (
     <use href={href} transform={`translate(${x} ${y})`} />
   ));
 
@@ -308,11 +308,11 @@ function MovingParts(): JSX.Element {
     {instantiateWithOffsets(pointsB, "#redSecondary")}
 
     {options.showPrimaryAxis       && dot(center, "black", primaryDot, true) /* actually not moving */}
-    {options.showBlueSecondaryAxes && mapToNode(pointsA, (p, i) => dot(p, blue, secondaryDot, i === 0))}
-    {options.showRedSecondaryAxes  && mapToNode(pointsB, (p, j) => dot(p, red , secondaryDot, j === 0))}
+    {options.showBlueSecondaryAxes && mapToElements(pointsA, (p, i) => dot(p, blue, secondaryDot, i === 0))}
+    {options.showRedSecondaryAxes  && mapToElements(pointsB, (p, j) => dot(p, red , secondaryDot, j === 0))}
     {options.showCorners &&
-      mapToNode(pointsA, ([xa, ya], i) =>
-        mapToNode(pointsB, ([xb, yb], j) =>
+      mapToElements(pointsA, ([xa, ya], i) =>
+        mapToElements(pointsB, ([xb, yb], j) =>
           dot([xa+xb, ya+yb], "black", tertiaryDot, i === 0 && j === 0)
         )
       )
