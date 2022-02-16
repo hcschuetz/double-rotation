@@ -268,9 +268,10 @@ const dot = ([cx, cy]: Point, color: string, radius: number, showMark: boolean):
 
 const center: Point = [0, 0];
 
-/** instantiate the referenced SVG definition several times with the given offsets
+/**
+ * instantiate the referenced SVG definition several times with the given offsets
  *
- * (This function was not called `useWithOffset` to avoid confusion with React hooks.)
+ * (This function is not called `useWithOffset` to avoid confusion with React hooks.)
  */
 const instantiateWithOffsets = (points: Point[], href: string): ReactNode =>
   mapToElements(points, ([x, y]) => (
